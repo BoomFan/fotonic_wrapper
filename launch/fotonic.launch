@@ -1,0 +1,15 @@
+<launch>
+  <arg name="pi/2" value="1.5707963267948966" />
+  <node pkg="tf2_ros" type="static_transform_publisher" name="fotonic_link"
+    args="0 -0.064 -0.1016 $(arg pi/2) 0 0 camera_link fotonic_link" />
+
+
+  <arg name="svo_file" default=""/>
+  
+  <group ns="camera">
+    <node name="fotonic_wrapper_node" pkg="fotonic_wrapper" type="fotonic_wrapper_node" args="$(arg svo_file)" output="screen">
+
+
+    </node>
+  </group>
+</launch>
