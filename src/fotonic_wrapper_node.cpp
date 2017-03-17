@@ -224,14 +224,14 @@ int main(int argc, char** argv)
 	}
 
 	
-	 ros::init(argc, argv, "image_publisher");
-	 ros::NodeHandle nh;
-	 image_transport::ImageTransport it(nh);
-	 //image_transport::CameraPublisher pub1 = it.advertiseCamera("fotonic/image", 1);
-	 image_transport::Publisher pub1 = it.advertise("fotonic/image", 1);
-	 image_transport::Publisher pub2 = it.advertise("fotonic/image/undistort", 1);
-	 // cv::Mat image = cv::imread(argv[1], CV_LOAD_IMAGE_COLOR);
-	 cv::waitKey(30);
+	ros::init(argc, argv, "image_publisher");
+	ros::NodeHandle nh;
+	image_transport::ImageTransport it(nh);
+	//image_transport::CameraPublisher pub1 = it.advertiseCamera("fotonic/image", 1);
+	image_transport::Publisher pub1 = it.advertise("fotonic/image", 1);
+	image_transport::Publisher pub2 = it.advertise("fotonic/image/undistort", 1);
+	// cv::Mat image = cv::imread(argv[1], CV_LOAD_IMAGE_COLOR);
+	cv::waitKey(30);
 
 	pcl::PointCloud<pcl::PointXYZI> cloud;
 	ros::NodeHandle nh2;
@@ -323,10 +323,10 @@ int main(int argc, char** argv)
 		
 		for(int i = 0; i < 120; i++){
 			for(int j = 0; j < 160; j++){
-			cloud.points[ct].intensity =   (float) aImage[i*4*160 + j];
-			cloud.points[ct].y = -0.001*(float) aImage[i * 4 * 160 + 160 + j];
-			cloud.points[ct].x = -0.001*(float) aImage[i * 4 * 160  + 2 * 160 + j] ;
-			cloud.points[ct].z = 0.001*(float) aImage[i * 4 * 160  + 3 * 160 + j] ;
+			cloud.points[ct].intensity =   (float) aImage[i*4*160 + j]; 				//Brightness
+			cloud.points[ct].y = -0.001*(float) aImage[i * 4 * 160 + 160 + j];			//camera_Z
+			cloud.points[ct].x = -0.001*(float) aImage[i * 4 * 160  + 2 * 160 + j] ;	//camera_X
+			cloud.points[ct].z = 0.001*(float) aImage[i * 4 * 160  + 3 * 160 + j] ;		//camera_Y
 			
 			ct++;
 
