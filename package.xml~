@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>fotonic-ros-wrapper</name>
+  <name>fotonic_wrapper</name>
   <version>0.1.0</version>
   <description>fotonic_wrapper is a ROS wrapper for the <a href="http://www.fotonic.com/product/fotonic-e-serie-16w/#tab-downloads"></a>
     for interfacing with the FOTONIC camera. 

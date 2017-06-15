@@ -50,7 +50,6 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/features/normal_3d.h>
-#include <pcl/segmentation/extract_clusters.h>
 
 #define MAX_DEVICES 40
 
@@ -60,15 +59,9 @@ std::string image_undistort_topic_name = "fotonic/image/undistort";
 std::string pcd_topic_name = "/fotonic/point_cloud/cloud";
 std::string pcd_unfiltered_topicname = "/fotonic/unfiltered/point_cloud/cloud";
 std::string pcd_forplane_topicname  = "/fotonic/forplane/point_cloud/cloud";
-std::string pcd_clustered_topicname = "/fotonic/clustered/point_cloud/cloud";
 std::string pcd_planed_topicname = "/fotonic/planed/point_cloud/cloud";
-std::string pcd_planed_clustered_topicname = "/fotonic/planed_clustered/point_cloud/cloud";
 std::string fotonic_link_name = "fotonic_link";
 
-int publish_rate = 30;
-bool cluster_for_unplaned_pts = true;
-bool fit_plane_model = true;
-bool cluster_for_planed_pts = true;
 
 // write image data to disc, replayable by 3DDisplay
 bool SaveImageAs3DD(short *pPixels, FZ_FRAME_HEADER *pstFrmHdr)
@@ -265,10 +258,7 @@ int main(int argc, char** argv)
 	ros::Publisher pub_cloud = nh2.advertise<pcl::PointCloud<pcl::PointXYZI> >(pcd_topic_name, 1);
 	ros::Publisher pub_cloud_unfiltered = nh2.advertise<pcl::PointCloud<pcl::PointXYZI> >(pcd_unfiltered_topicname, 1);
 	ros::Publisher pub_cloud_forplane = nh2.advertise<pcl::PointCloud<pcl::PointXYZ> >(pcd_forplane_topicname, 1);
-	ros::Publisher pub_cloud_clustered = nh2.advertise<pcl::PointCloud<pcl::PointXYZ> >(pcd_clustered_topicname, 1);
-	ros::Publisher pub_cloud_planed_xyzi = nh2.advertise<pcl::PointCloud<pcl::PointXYZI> >(pcd_planed_topicname, 1);
-	ros::Publisher pub_cloud_planed_clustered = nh2.advertise<pcl::PointCloud<pcl::PointXYZ> >(pcd_planed_clustered_topicname, 1);
-
+	ros::Publisher pub_cloud_planed = nh2.advertise<pcl::PointCloud<pcl::PointXYZI> >(pcd_planed_topicname, 1);
 	
 	bool p_filter_;
 	nh2.param<bool>("use_filter", p_filter_, true);
@@ -306,7 +296,7 @@ int main(int argc, char** argv)
 
 
 	// publish ROS topics in the while loop
-	ros::Rate loop_rate(publish_rate);
+	ros::Rate loop_rate(30);
 	while (nh.ok()) {
 		ros::Time tic = ros::Time::now();
 
@@ -492,204 +482,96 @@ int main(int argc, char** argv)
 	    std::cout <<"Publishing pointclouds took: "<< diff <<" seconds" << std::endl;
 
 
+		// Fit pointclouds into a Plane model. Tutorial:
+		// http://pointclouds.org/documentation/tutorials/planar_segmentation.php
+		tic = ros::Time::now();
+
+		//Creat pointcloud for plane-segmented sensor data
+		// pcl::PointCloud<pcl::PointXYZI> cloud_planed;
+		// cloud_planed = pcl::PointCloud<pcl::PointXYZI>();
+		pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_planed(new pcl::PointCloud<pcl::PointXYZI>);
+		// cloud_planed->width = ct;
+		// cloud_planed->height = 1;
+		// cloud_planed->points.resize(ct * 1);
+
+		// Create the filtering object
+    	pcl::ExtractIndices<pcl::PointXYZ> extract;
+    	int j = 0, nr_points = (int) cloud_forplane->points.size ();
+
+    	while (cloud_forplane->points.size () > 0.3 * nr_points && nh.ok()){
+			seg.setInputCloud (cloud_forplane);
+			// seg.setInputNormals (cloud_normals);
+		  	seg.segment (*inliers, *coefficients);
+
+		  	if (inliers->indices.size () == 0)
+		  	{
+		    	PCL_ERROR ("Could not estimate a planar model for the given dataset.");
+		    	// return (-1);
+		    	break;
+		  	}
+
+		  	std::cerr << "Model coefficients: " << coefficients->values[0] << " " 
+		                                      << coefficients->values[1] << " "
+		                                      << coefficients->values[2] << " " 
+		                                      << coefficients->values[3] << std::endl;
+		  	std::cerr << "Model inliers: " << inliers->indices.size () << std::endl;
+
+		  	int pt_index;
+		  	int now_intensity = rand() % 4096;
+		  	for (size_t i = 0; i < inliers->indices.size (); ++i){
+		  		pt_index = inliers->indices[i];
+		  		// cloud_planed.points[pt_index].intensity =  4000; 
+		  		// cloud_planed.points[pt_index].x = cloud_forplane->points[pt_index].x;
+		  		// cloud_planed.points[pt_index].y = cloud_forplane->points[pt_index].y;
+		  		// cloud_planed.points[pt_index].z = cloud_forplane->points[pt_index].z;
+			  	// std::cerr << "pt index:" << pt_index << "   x,y,z =  " << cloud_forplane->points[pt_index].x << " "
+	     //                                       << cloud_forplane->points[pt_index].y << " "
+	     //                                       << cloud_forplane->points[pt_index].z << std::endl;
+		  		pcl::PointXYZI now_point;
+		  		now_point.intensity = now_intensity;
+		  		now_point.x = cloud_forplane->points[pt_index].x;
+	            now_point.y = cloud_forplane->points[pt_index].y;
+	            now_point.z = cloud_forplane->points[pt_index].z;
+		  		// cloud_planed->points.push_back (pcl::PointXYZ(cloud_forplane->points[pt_index].x, cloud_forplane->points[pt_index].y, cloud_forplane->points[pt_index].z));
+		  		cloud_planed->points.push_back(now_point);
+		  	}
+
+		    // Extract the inliers
+		    extract.setInputCloud (cloud_forplane);
+		    extract.setIndices (inliers);
+		    // extract.setNegative (false);
+		    // extract.filter (*cloud_planed);
+		    extract.setNegative (true);
+    		extract.filter (*cloud_forplane);
+		    j++;
+
+	    }
+	  	toc = ros::Time::now();
+		diff = toc - tic;
+	    std::cout <<"Fitting plane model took: "<< diff <<" seconds" << std::endl << std::endl;
+
+
 		// Publish all the pointclouds into ROS
 		pcl_conversions::toPCL(now, cloud.header.stamp);
 		pcl_conversions::toPCL(now, cloud_unfiltered.header.stamp);
 		pcl_conversions::toPCL(now, cloud_forplane->header.stamp);
-	
+		// pcl_conversions::toPCL(now, cloud_planed.header.stamp);
+		pcl_conversions::toPCL(now, cloud_planed->header.stamp);
 		cloud.header.frame_id = fotonic_link_name;
 		cloud_unfiltered.header.frame_id = fotonic_link_name;
 		cloud_forplane->header.frame_id = fotonic_link_name;
-
+		// cloud_planed.header.frame_id = fotonic_link_name;
+		cloud_planed->header.frame_id = fotonic_link_name;
 		pub_cloud.publish(cloud);
 		pub_cloud_unfiltered.publish(cloud_unfiltered);
 		pub_cloud_forplane.publish(*cloud_forplane);
+		// pub_cloud_planed.publish(cloud_planed);
+		pub_cloud_planed.publish(*cloud_planed);
 
+		
 		// Publish images into ROS
 		pub1.publish(msg1);
 		pub2.publish(msg2);
-
-
-
-		// Start clustering for unplaned pointcloud
-		// Creating the KdTree object for the search method of the extraction
-		tic = ros::Time::now();
-		pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
-		tree->setInputCloud (cloud_forplane);
-
-		std::vector<pcl::PointIndices> cluster_indices;
-		pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-		ec.setClusterTolerance (0.05); // 2cm
-		ec.setMinClusterSize (100);
-		ec.setMaxClusterSize (25000);
-		ec.setSearchMethod (tree);
-		ec.setInputCloud (cloud_forplane);
-		ec.extract (cluster_indices);
-
-		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_clustered(new pcl::PointCloud<pcl::PointXYZ>);
-		int j = 0;
-		if(cluster_for_unplaned_pts){
-			for (std::vector<pcl::PointIndices>::const_iterator con_it = cluster_indices.begin (); con_it != cluster_indices.end (); ++con_it){
-			    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster_temp (new pcl::PointCloud<pcl::PointXYZ>);
-			    for (std::vector<int>::const_iterator pit = con_it->indices.begin (); pit != con_it->indices.end (); ++pit){
-			    	cloud_cluster_temp->points.push_back (cloud_forplane->points[*pit]); //*
-			    	cloud_clustered->points.push_back (cloud_forplane->points[*pit]); //*
-			    }
-			    cloud_cluster_temp->width = cloud_cluster_temp->points.size ();
-			    cloud_cluster_temp->height = 1;
-			    cloud_cluster_temp->is_dense = true;
-
-			    std::cout << "PointCloud representing the Cluster: " << cloud_cluster_temp->points.size () << " data points." << std::endl;
-			    // std::stringstream ss;
-			    // ss << "cloud_cluster_" << j << ".pcd";
-			    // writer.write<pcl::PointXYZ> (ss.str (), *cloud_cluster, false); //*
-			    j++;
-			}
-			cloud_clustered->width = cloud_clustered->points.size ();
-		    cloud_clustered->height = 1;
-		    cloud_clustered->is_dense = true;
-
-		  	toc = ros::Time::now();
-			diff = toc - tic;
-		    std::cout <<"Clustering for unplaned points took: "<< diff <<" seconds" << std::endl;
-		}
-
-		if(cluster_for_unplaned_pts){
-			pcl_conversions::toPCL(now, cloud_clustered->header.stamp);
-			cloud_clustered->header.frame_id = fotonic_link_name;
-			pub_cloud_clustered.publish(*cloud_clustered);
-		}
-
-
-
-
-		// Fit pointclouds into a Plane model. Tutorial:
-		// http://pointclouds.org/documentation/tutorials/planar_segmentation.php
-
-		tic = ros::Time::now();
-
-		//Creat pointcloud for plane-segmented sensor data
-		// pcl::PointCloud<pcl::PointXYZI> cloud_planed_xyzi;
-		// cloud_planed_xyzi = pcl::PointCloud<pcl::PointXYZI>();
-		pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_planed_xyzi(new pcl::PointCloud<pcl::PointXYZI>);
-		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_planed_xyz(new pcl::PointCloud<pcl::PointXYZ>);
-		// cloud_planed_xyzi->width = ct;
-		// cloud_planed_xyzi->height = 1;
-		// cloud_planed_xyzi->points.resize(ct * 1);
-
-		// Create the filtering object
-    	pcl::ExtractIndices<pcl::PointXYZ> extract;
-    	int nr_points = (int) cloud_forplane->points.size ();
-	    if(fit_plane_model){
-	    	while (cloud_forplane->points.size () > 0.3 * nr_points && nh.ok()){
-				seg.setInputCloud (cloud_forplane);
-				// seg.setInputNormals (cloud_normals);
-			  	seg.segment (*inliers, *coefficients);
-
-			  	if (inliers->indices.size () == 0)
-			  	{
-			    	PCL_ERROR ("Could not estimate a planar model for the given dataset.");
-			    	// return (-1);
-			    	break;
-			  	}
-
-			  	std::cerr << "Model coefficients: " << coefficients->values[0] << " " 
-			                                      << coefficients->values[1] << " "
-			                                      << coefficients->values[2] << " " 
-			                                      << coefficients->values[3] << std::endl;
-			  	std::cerr << "Model inliers: " << inliers->indices.size () << std::endl;
-
-			  	int pt_index;
-			  	int now_intensity = rand() % 4096;
-			  	for (size_t i = 0; i < inliers->indices.size (); ++i){
-			  		pt_index = inliers->indices[i];
-			  		// cloud_planed_xyzi.points[pt_index].intensity =  4000; 
-			  		// cloud_planed_xyzi.points[pt_index].x = cloud_forplane->points[pt_index].x;
-			  		// cloud_planed_xyzi.points[pt_index].y = cloud_forplane->points[pt_index].y;
-			  		// cloud_planed_xyzi.points[pt_index].z = cloud_forplane->points[pt_index].z;
-				  	// std::cerr << "pt index:" << pt_index << "   x,y,z =  " << cloud_forplane->points[pt_index].x << " "
-		     //                                       << cloud_forplane->points[pt_index].y << " "
-		     //                                       << cloud_forplane->points[pt_index].z << std::endl;
-			  		pcl::PointXYZI now_point;
-			  		now_point.intensity = now_intensity;
-			  		now_point.x = cloud_forplane->points[pt_index].x;
-		            now_point.y = cloud_forplane->points[pt_index].y;
-		            now_point.z = cloud_forplane->points[pt_index].z;
-			  		cloud_planed_xyzi->points.push_back(now_point);
-			  		cloud_planed_xyz->points.push_back (pcl::PointXYZ(now_point.x, now_point.y, now_point.z));
-			  	}
-
-			    // Extract the inliers
-			    extract.setInputCloud (cloud_forplane);
-			    extract.setIndices (inliers);
-			    // extract.setNegative (false);
-			    // extract.filter (*cloud_planed_xyzi);
-			    extract.setNegative (true);
-	    		extract.filter (*cloud_forplane);
-
-		    }
-		}
-	  	toc = ros::Time::now();
-		diff = toc - tic;
-	    std::cout <<"Fitting plane model took: "<< diff <<" seconds" << std::endl;
-		if(fit_plane_model){
-			pcl_conversions::toPCL(now, cloud_planed_xyzi->header.stamp);
-			cloud_planed_xyzi->header.frame_id = fotonic_link_name;
-			pub_cloud_planed_xyzi.publish(*cloud_planed_xyzi);
-		}
-
-		// Start clustering
-		// Creating the KdTree object for the search method of the extraction
-		
-		tic = ros::Time::now();
-		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_planed_clustered(new pcl::PointCloud<pcl::PointXYZ>);
-		if(fit_plane_model && cluster_for_planed_pts){
-			// pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
-			tree->setInputCloud (cloud_planed_xyz);
-			// std::vector<pcl::PointIndices> cluster_indices;
-			// pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-
-			ec.setClusterTolerance (0.02); // 2cm
-			ec.setMinClusterSize (100);
-			ec.setMaxClusterSize (25000);
-			ec.setSearchMethod (tree);
-			ec.setInputCloud (cloud_planed_xyz);
-			ec.extract (cluster_indices);
-			j = 0;
-			for (std::vector<pcl::PointIndices>::const_iterator con_it = cluster_indices.begin (); con_it != cluster_indices.end (); ++con_it){
-			    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster_temp (new pcl::PointCloud<pcl::PointXYZ>);
-			    for (std::vector<int>::const_iterator pit = con_it->indices.begin (); pit != con_it->indices.end (); ++pit){
-			    	cloud_cluster_temp->points.push_back (cloud_planed_xyz->points[*pit]); //*
-			    	cloud_planed_clustered->points.push_back (cloud_planed_xyz->points[*pit]); //*
-			    }
-			    cloud_cluster_temp->width = cloud_cluster_temp->points.size ();
-			    cloud_cluster_temp->height = 1;
-			    cloud_cluster_temp->is_dense = true;
-
-			    std::cout << "PointCloud representing the Cluster: " << cloud_cluster_temp->points.size () << " data points." << std::endl;
-			    // std::stringstream ss;
-			    // ss << "cloud_cluster_" << j << ".pcd";
-			    // writer.write<pcl::PointXYZ> (ss.str (), *cloud_cluster, false); //*
-			    j++;
-			}
-			cloud_planed_clustered->width = cloud_planed_clustered->points.size ();
-		    cloud_planed_clustered->height = 1;
-		    cloud_planed_clustered->is_dense = true;
-
-		  	toc = ros::Time::now();
-			diff = toc - tic;
-		    std::cout <<"Clustering for planed points took: "<< diff <<" seconds" << std::endl << std::endl;
-		}
-
-		if(fit_plane_model){
-			if(cluster_for_planed_pts){
-				pcl_conversions::toPCL(now, cloud_planed_clustered->header.stamp);
-				cloud_planed_clustered->header.frame_id = fotonic_link_name;
-				pub_cloud_planed_clustered.publish(*cloud_planed_clustered);
-			}
-		}
-		
-
 		ros::spinOnce();
 		loop_rate.sleep();
 	}

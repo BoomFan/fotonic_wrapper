@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8.7)
 
-project(fotonic-ros-wrapper)
+project(fotonic_wrapper)
 
 #find_package(PCL 1.3 REQUIRED COMPONENTS common io)
 #include_directories(${PCL_INCLUDE_DIRS})
@@ -25,6 +25,7 @@ endif()
 
 find_package(OpenCV 2.4 COMPONENTS core highgui imgproc REQUIRED)
 find_package(PCL REQUIRED)
+
 
 find_package(catkin REQUIRED COMPONENTS
   image_transport
@@ -74,7 +75,6 @@ link_directories(/usr/local/fotonic)
 
 add_definitions(-std=c++11)# -m64) #-Wall)
 
-
 add_executable(
   fotonic_wrapper_node
   src/fotonic_wrapper_node.cpp
@@ -88,7 +88,7 @@ target_link_libraries(
         ${PCL_LIBRARIES}  
     )
 
-add_dependencies(fotonic_wrapper_node ${PROJECT_NAME}_gencfg)
+add_dependencies(fotonic_wrapper_node ${PROJECT_NAME}_gencfg ${PCL_INCLUDE_DIRS})
 ###############################################################################
 
 #Add all files in subdirectories of the project in

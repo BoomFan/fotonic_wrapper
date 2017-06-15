@@ -26,6 +26,7 @@ endif()
 find_package(OpenCV 2.4 COMPONENTS core highgui imgproc REQUIRED)
 find_package(PCL REQUIRED)
 
+
 find_package(catkin REQUIRED COMPONENTS
   image_transport
   roscpp
@@ -72,8 +73,7 @@ link_directories(/usr/local/fotonic)
 ###############################################################################
 # EXECUTABLE
 
-add_definitions(-std=c++11)# -m64) #-Wall)
-
+# add_definitions(-std=c++11)# -m64) #-Wall)
 
 add_executable(
   fotonic_wrapper_node
@@ -88,7 +88,7 @@ target_link_libraries(
         ${PCL_LIBRARIES}  
     )
 
-add_dependencies(fotonic_wrapper_node ${PROJECT_NAME}_gencfg)
+add_dependencies(fotonic_wrapper_node ${PROJECT_NAME}_gencfg ${PCL_INCLUDE_DIRS})
 ###############################################################################
 
 #Add all files in subdirectories of the project in

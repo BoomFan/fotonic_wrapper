@@ -20,6 +20,8 @@
   <build_depend>fz_api</build_depend>
   <build_depend>fz_commands</build_depend>
   <build_depend>fz_types</build_depend>
+  <build_depend>pcl_ros</build_depend>
+  <build_depend>pcl</build_depend>
 
 
 
@@ -33,6 +35,8 @@
   <run_depend>fz_api</run_depend>
   <run_depend>fz_commands</run_depend>
   <run_depend>fz_types</run_depend>
+  <run_depend>pcl_ros</run_depend>
+  <run_depend>pcl</run_depend>
   
   <export>
   </export>
