@@ -66,9 +66,9 @@ std::string pcd_planed_clustered_topicname = "/fotonic/planed_clustered/point_cl
 std::string fotonic_link_name = "fotonic_link";
 
 int publish_rate = 30;
-bool cluster_for_unplaned_pts = true;
-bool fit_plane_model = true;
-bool cluster_for_planed_pts = true;
+bool cluster_for_unplaned_pts = false;
+bool fit_plane_model = false;
+bool cluster_for_planed_pts = false;
 
 // write image data to disc, replayable by 3DDisplay
 bool SaveImageAs3DD(short *pPixels, FZ_FRAME_HEADER *pstFrmHdr)
@@ -102,7 +102,8 @@ error:
 
 
 FZ_FRAME_HEADER stFrameHdr;
-short aImage[640*480*4];
+// short aImage[640*480*4];
+short aImage[160*120*4];
 
 void FZLogCallback(char *szMetadata, char *szMessage)
 {
@@ -307,32 +308,37 @@ int main(int argc, char** argv)
 
 	// publish ROS topics in the while loop
 	ros::Rate loop_rate(publish_rate);
+	int i = 0;
 	while (nh.ok()) {
 		ros::Time tic = ros::Time::now();
 
 		// get images
-		for(int i=0; i<1; i++) {
-			size_t iBufSize = sizeof(aImage);
-			iResult = FZ_GetFrame(hDevice, &stFrameHdr, aImage, &iBufSize);
+		size_t iBufSize = sizeof(aImage);
+		iResult = FZ_GetFrame(hDevice, &stFrameHdr, aImage, &iBufSize);
+		i++;
+		if( iResult!=FZ_Success ) {
+			printf("ERROR: FZ_GetFrame failed (code 0x%02x)\n", iResult);
+            FZ_Exit();
+		}
+		// printf("Got frame %d\n", i);
+		
+		//Get temperature every 40'th frame
+		
+		if (i%40 == 0){
+			int iTempLED = 0;
+			i = 0;
+			iRespBytes = sizeof(short);
+			iResult = FZ_IOCtl(hDevice,CMD_DE_GET_LED_TEMP, NULL, 0,&iRespCode, &iTempLED, &iRespBytes);
+			if(iRespCode != (int)R_CMD_DE_ACK) iTempLED = 0;
+			
+			printf("Temp : %d\n", iTempLED);
 			if( iResult!=FZ_Success ) {
-				printf("ERROR: FZ_GetFrame failed (code 0x%02x)\n", iResult);
-	            FZ_Exit();
+			printf("ERROR: FTemp failed (code 0x%02x)\n", iResult);
+            FZ_Exit();
 			}
-			// printf("Got frame %d\n", i);
-			
-			//Get temperature every 40'th frame
-			
-			// if (i%40 == 0){
-			// 	int iTempLED = 0;		
-			// 	iRespBytes = sizeof(short);
-			// 	iResult = FZ_IOCtl(hDevice,CMD_DE_GET_LED_TEMP, NULL, 0,&iRespCode, &iTempLED, &iRespBytes);
-			// 	if(iRespCode != (int)R_CMD_DE_ACK) iTempLED = 0;
-				
-			// 	printf("Temp : %d\n", iTempLED);
-
-			// }
 
 		}
+
 		ros::Time toc = ros::Time::now();
 		ros::Duration diff = toc - tic;
 	    std::cout <<"Getting data from sensor took: "<< diff <<" seconds" << std::endl;
@@ -452,7 +458,7 @@ int main(int argc, char** argv)
 						// cloud_forplane->points[ct].y = pt_y;							//camera_Z
 						// cloud_forplane->points[ct].x = pt_x;							//camera_X
 						// cloud_forplane->points[ct].z = pt_z;							//camera_Y
-						if (pt_z > -0.2 && pt_z < 0.5){ // only pushback those points between floor and ceilings
+						if (pt_z > -0.2 && pt_z < 0.5 && fit_plane_model){ // only pushback those points between floor and ceilings
 							cloud_forplane->points.push_back (pcl::PointXYZ(pt_x, pt_y, pt_z));
 						}
 
@@ -474,7 +480,7 @@ int main(int argc, char** argv)
 					// cloud_forplane->points[ct].y = pt_y;							//camera_Z
 					// cloud_forplane->points[ct].x = pt_x;							//camera_X
 					// cloud_forplane->points[ct].z = pt_z;							//camera_Y
-					if (pt_z > -0.2 && pt_z < 0.5){
+					if (pt_z > -0.2 && pt_z < 0.5 && fit_plane_model){
 						cloud_forplane->points.push_back (pcl::PointXYZ(pt_x, pt_y, pt_z));
 					}
 
@@ -494,16 +500,21 @@ int main(int argc, char** argv)
 
 		// Publish all the pointclouds into ROS
 		pcl_conversions::toPCL(now, cloud.header.stamp);
-		pcl_conversions::toPCL(now, cloud_unfiltered.header.stamp);
-		pcl_conversions::toPCL(now, cloud_forplane->header.stamp);
-	
 		cloud.header.frame_id = fotonic_link_name;
-		cloud_unfiltered.header.frame_id = fotonic_link_name;
-		cloud_forplane->header.frame_id = fotonic_link_name;
-
 		pub_cloud.publish(cloud);
-		pub_cloud_unfiltered.publish(cloud_unfiltered);
-		pub_cloud_forplane.publish(*cloud_forplane);
+		
+		
+		if (p_filter_) {
+			pcl_conversions::toPCL(now, cloud_unfiltered.header.stamp);
+			cloud_unfiltered.header.frame_id = fotonic_link_name;
+			pub_cloud_unfiltered.publish(cloud_unfiltered);
+			if (fit_plane_model) {
+				pcl_conversions::toPCL(now, cloud_forplane->header.stamp);
+				cloud_forplane->header.frame_id = fotonic_link_name;
+				pub_cloud_forplane.publish(*cloud_forplane);
+			}
+			
+		}
 
 		// Publish images into ROS
 		pub1.publish(msg1);
@@ -675,11 +686,10 @@ int main(int argc, char** argv)
 			cloud_planed_clustered->width = cloud_planed_clustered->points.size ();
 		    cloud_planed_clustered->height = 1;
 		    cloud_planed_clustered->is_dense = true;
-
-		  	toc = ros::Time::now();
-			diff = toc - tic;
-		    std::cout <<"Clustering for planed points took: "<< diff <<" seconds" << std::endl << std::endl;
 		}
+		toc = ros::Time::now();
+		diff = toc - tic;
+	    std::cout <<"Clustering for planed points took: "<< diff <<" seconds" << std::endl << std::endl;
 
 		if(fit_plane_model){
 			if(cluster_for_planed_pts){
