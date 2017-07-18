@@ -102,8 +102,8 @@ error:
 
 
 FZ_FRAME_HEADER stFrameHdr;
-// short aImage[640*480*4];
-short aImage[160*120*4];
+short aImage[640*480*4];
+// short aImage[160*120*4];
 
 void FZLogCallback(char *szMetadata, char *szMessage)
 {
@@ -308,14 +308,13 @@ int main(int argc, char** argv)
 
 	// publish ROS topics in the while loop
 	ros::Rate loop_rate(publish_rate);
-	int i = 0;
+	int loop_cnt = 0;
 	while (nh.ok()) {
 		ros::Time tic = ros::Time::now();
 
 		// get images
 		size_t iBufSize = sizeof(aImage);
 		iResult = FZ_GetFrame(hDevice, &stFrameHdr, aImage, &iBufSize);
-		i++;
 		if( iResult!=FZ_Success ) {
 			printf("ERROR: FZ_GetFrame failed (code 0x%02x)\n", iResult);
             FZ_Exit();
@@ -324,9 +323,9 @@ int main(int argc, char** argv)
 		
 		//Get temperature every 40'th frame
 		
-		if (i%40 == 0){
+		if (loop_cnt%40 == 0){
 			int iTempLED = 0;
-			i = 0;
+			loop_cnt = 0;
 			iRespBytes = sizeof(short);
 			iResult = FZ_IOCtl(hDevice,CMD_DE_GET_LED_TEMP, NULL, 0,&iRespCode, &iTempLED, &iRespBytes);
 			if(iRespCode != (int)R_CMD_DE_ACK) iTempLED = 0;
@@ -346,9 +345,8 @@ int main(int argc, char** argv)
 		tic = ros::Time::now();
 		// save the last image on disc
 		float maxz=0;
-	    for (int k = 0; k < 120; k++)
-	        for (int j=0; j < 160; j++)
-	        {
+	    for (int k = 0; k < 120; k++){
+	        for (int j=0; j < 160; j++){
 	   	//Data of aImage. The channels are in the order Brightness,Z,X,Y. The channels are 16 bit integers. On most platforms that corresponds to "short int".
 		//The B and Z channels are 16 bit unsigned, while X and Y are 16 bit signed, with 0 in the center of the image.
 		//All X, Y and Z distances are measured in millimeters. 
@@ -375,6 +373,7 @@ int main(int argc, char** argv)
 	            myimage.at<Vec3b>(k,j)[1] = color;
 	            myimage.at<Vec3b>(k,j)[2] = color;
 	        }
+	    }
 
 	    ROS_INFO("Max z(camera axis) = %f", maxz);
 	    cv::flip(myimage, myimage, 0);  
