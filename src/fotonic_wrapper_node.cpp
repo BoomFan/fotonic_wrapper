@@ -319,6 +319,7 @@ int main(int argc, char** argv)
 			printf("ERROR: FZ_GetFrame failed (code 0x%02x)\n", iResult);
             FZ_Exit();
 		}
+		loop_cnt++;
 		// printf("Got frame %d\n", i);
 		
 		//Get temperature every 40'th frame
